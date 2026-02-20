@@ -18,14 +18,17 @@ export default function ComboCard({ combo }: { combo: ComboProps }) {
 
   return (
     <div 
-      className={`relative group rounded-2xl p-5 border transition-all duration-300 cursor-pointer overflow-hidden
+      className={`relative group rounded-2xl p-5 border transition-all duration-300 cursor-pointer 
         ${isOpen 
           ? 'bg-zinc-900 border-fuchsia-900/50 shadow-[0_0_20px_rgba(162,28,175,0.15)]' 
-          : 'bg-zinc-900/60 border-zinc-800 hover:border-zinc-700 hover:bg-zinc-800'}`}
+          : 'bg-zinc-900/60 border-zinc-800 hover:border-zinc-700 hover:bg-zinc-800'}
+        ${menuOpen ? 'z-50' : 'z-0'} /* メニューが開いている時は最前面に持ってくる！ */
+      `}
       onClick={() => setIsOpen(!isOpen)}
+      // ※ overflow-hidden を削除しました ※
     >
-      {/* 背景の装飾（薄いグラデーション） */}
-      {isOpen && <div className="absolute top-0 right-0 w-32 h-32 bg-fuchsia-500/5 blur-[80px] rounded-full pointer-events-none"></div>}
+      {/* 背景の装飾（isOpenの時だけ） */}
+      {isOpen && <div className="absolute top-0 right-0 w-32 h-32 bg-fuchsia-500/5 blur-[60px] rounded-full pointer-events-none -z-10"></div>}
 
       <div className="flex justify-between items-start mb-3 relative z-10">
         {/* コンボレシピ部分 */}
@@ -50,17 +53,20 @@ export default function ComboCard({ combo }: { combo: ComboProps }) {
           >
             ︙
           </button>
+          
           {menuOpen && (
-            <div className="absolute right-0 top-8 bg-zinc-800 border border-zinc-700 shadow-xl rounded-lg z-20 w-28 overflow-hidden">
+            // z-indexを高くし、背景もしっかり指定
+            <div className="absolute right-0 top-8 bg-zinc-950 border border-zinc-700 shadow-2xl rounded-lg z-[100] w-32 overflow-hidden">
               <Link 
                 href={`/edit/${combo.id}`}
-                className="block w-full text-left px-4 py-2.5 text-xs text-zinc-300 hover:bg-zinc-700 hover:text-white"
+                className="block w-full text-left px-4 py-3 text-xs font-bold text-zinc-300 hover:bg-zinc-800 hover:text-white transition-colors"
+                onClick={(e) => e.stopPropagation()}
               >
                 EDIT
               </Link>
-              <form action={deleteCombo}>
+              <form action={deleteCombo} onClick={(e) => e.stopPropagation()}>
                 <input type="hidden" name="id" value={combo.id} />
-                <button type="submit" className="block w-full text-left px-4 py-2.5 text-xs text-red-400 hover:bg-red-900/20 hover:text-red-300">
+                <button type="submit" className="block w-full text-left px-4 py-3 text-xs font-bold text-red-400 hover:bg-red-900/20 hover:text-red-300 transition-colors border-t border-zinc-800">
                   DELETE
                 </button>
               </form>
@@ -80,6 +86,7 @@ export default function ComboCard({ combo }: { combo: ComboProps }) {
 
       {/* 詳細情報（アコーディオン） */}
       <div className={`grid transition-[grid-template-rows] duration-300 ease-out ${isOpen ? 'grid-rows-[1fr] mt-4 pt-4 border-t border-zinc-800' : 'grid-rows-[0fr]'}`}>
+        {/* ここの中だけ overflow-hidden にすることで、アコーディオンのアニメーションは維持する */}
         <div className="overflow-hidden">
            <div className="flex gap-8 mb-4">
              <div className="flex flex-col">

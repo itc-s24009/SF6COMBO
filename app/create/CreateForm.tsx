@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { updateCombo } from "../../action";
+import { createCombo } from "../action";
 import Link from "next/link";
 
 const MOVE_GROUPS = [
@@ -17,23 +17,17 @@ const MOVE_GROUPS = [
   { category: "システム・移動", moves: ["前ステ", "バクステ", "DR", "CDR", "垂直", "前ジャンプ", "後ろジャンプ", "前投げ", "後ろ投げ", "インパクト", "パリィスカ"] }
 ];
 
-type Props = {
-  combo: { id: string; moves: string; endFrame: number | null; damage: number | null; remarks: string | null; tags: { name: string }[]; };
-  // 受け取るデータ(Props)の型に追加
-  allTags: { id: string; name: string }[];
-}
-
-export default function EditForm({ combo, allTags }: Props) {
-  const [selectedMoves, setSelectedMoves] = useState<string[]>(combo.moves.split(" > "));
+export default function CreateForm({ allTags }: { allTags: { id: string; name: string }[] }) {
+  const [selectedMoves, setSelectedMoves] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState<string>("");
-  const [tags, setTags] = useState<string[]>(combo.tags.map(t => t.name));
+  const [tags, setTags] = useState<string[]>([]);
 
   const addMove = (move: string) => setSelectedMoves([...selectedMoves, move]);
   const removeMove = (indexToRemove: number) => {
     setSelectedMoves(selectedMoves.filter((_, index) => index !== indexToRemove));
   };
   
-  // エンターキーで新規タグ
+  // テキストボックスからタグ追加
   const addTag = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
       e.preventDefault(); 
@@ -44,24 +38,26 @@ export default function EditForm({ combo, allTags }: Props) {
     }
   }
 
-  // 候補のボタンから既存タグ
+  // 候補ボタンからタグ追加
   const addExistingTag = (tagName: string) => {
     if (!tags.includes(tagName)) {
       setTags([...tags, tagName]);
     }
   }
 
+  // 選ばれていない「既存のタグ」だけのリストを作る
   const availableTags = allTags.filter((t) => !tags.includes(t.name));
 
   return (
     <div className="max-w-4xl mx-auto pb-20 text-zinc-100 min-h-screen">
-      <div className="sticky top-0 z-50 bg-zinc-950/95 backdrop-blur-md border-b border-cyan-900/30 shadow-xl">
+      <div className="sticky top-0 z-50 bg-zinc-950/95 backdrop-blur-md border-b border-zinc-800 shadow-xl">
         <div className="p-3 max-w-4xl mx-auto flex flex-col gap-2">
           <div className="flex justify-between items-center text-xs">
-            <span className="font-bold tracking-widest text-cyan-500">EDIT RECORD</span>
+            <span className="font-bold tracking-widest text-zinc-500">NEW RECORD</span>
             <Link href="/" className="font-bold text-zinc-500 hover:text-white transition">CANCEL</Link>
           </div>
           <div className="min-h-[50px] flex flex-wrap gap-2 items-center relative">
+            {selectedMoves.length === 0 && <span className="text-zinc-700 text-xs font-mono">INPUT COMMANDS...</span>}
             {selectedMoves.map((move, index) => (
               <button key={index} onClick={() => removeMove(index)} className="group relative bg-zinc-800 border border-zinc-700 text-zinc-100 px-2 py-1 rounded text-xs font-bold hover:bg-red-900/50 hover:border-red-500 hover:text-red-200 transition-all">
                 {move}
@@ -76,14 +72,14 @@ export default function EditForm({ combo, allTags }: Props) {
         <div className="space-y-4">
           {MOVE_GROUPS.map((group) => (
             <div key={group.category}>
-              <h3 className="text-[10px] font-bold text-zinc-600 uppercase mb-1 flex items-center gap-2"><span className="w-1 h-1 bg-cyan-500 rounded-full"></span>{group.category}</h3>
+              <h3 className="text-[10px] font-bold text-zinc-600 uppercase mb-1 flex items-center gap-2"><span className="w-1 h-1 bg-purple-500 rounded-full"></span>{group.category}</h3>
               <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-1.5">
                 {group.moves.map((move) => {
                   const isSpecial = move.includes("SA") || move.includes("OD");
                   const isSystem = ["DR", "CDR", "インパクト", "パリィスカ", "前ステ", "バクステ"].includes(move);
                   const isJump = group.category === "空中";
                   return (
-                    <button type="button" key={move} onClick={() => addMove(move)} className={`py-2 px-1 text-[11px] font-bold rounded border active:scale-95 transition-colors ${isSpecial ? 'bg-fuchsia-950/40 border-fuchsia-900 text-fuchsia-200 hover:bg-fuchsia-900/60 shadow-fuchsia-900/20' : isSystem ? 'bg-cyan-950/30 border-cyan-800 text-cyan-200 hover:bg-cyan-900/50' : isJump ? 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:bg-zinc-800' : 'bg-zinc-900 border-zinc-800 text-zinc-300 hover:bg-zinc-800 hover:border-zinc-600'}`}>{move}</button>
+                    <button type="button" key={move} onClick={() => addMove(move)} className={`py-2 px-1 text-[11px] font-bold rounded border active:scale-95 transition-colors ${isSpecial ? 'bg-fuchsia-950/40 border-fuchsia-900 text-fuchsia-200 hover:bg-fuchsia-900/60' : isSystem ? 'bg-slate-900 border-slate-800 text-slate-300 hover:bg-slate-800' : isJump ? 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:bg-zinc-800' : 'bg-zinc-900 border-zinc-800 text-zinc-300 hover:bg-zinc-800 hover:border-zinc-600'}`}>{move}</button>
                   )
                 })}
               </div>
@@ -91,19 +87,18 @@ export default function EditForm({ combo, allTags }: Props) {
           ))}
         </div>
 
-        <form action={updateCombo} className="space-y-6 pt-4 border-t border-zinc-800">
-          <input type="hidden" name="id" value={combo.id} />
+        <form action={createCombo} className="space-y-6 pt-4 border-t border-zinc-800">
           <input type="hidden" name="moves" value={selectedMoves.join(" > ")} />
           <input type="hidden" name="tags" value={tags.join(",")} />
 
           <div className="flex gap-4">
             <div className="w-1/2">
               <label className="block text-[10px] font-bold text-zinc-500 mb-1 uppercase tracking-widest">Advantage</label>
-              <input type="number" name="endFrame" defaultValue={combo.endFrame ?? ""} className="bg-zinc-900 border border-zinc-800 text-white p-3 rounded-lg w-full focus:outline-none focus:border-cyan-500 transition [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none" />
+              <input type="number" name="endFrame" placeholder="+4" className="bg-zinc-900 border border-zinc-800 text-white p-3 rounded-lg w-full focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none" />
             </div>
             <div className="w-1/2">
               <label className="block text-[10px] font-bold text-zinc-500 mb-1 uppercase tracking-widest">Damage</label>
-              <input type="number" name="damage" defaultValue={combo.damage ?? ""} className="bg-zinc-900 border border-zinc-800 text-white p-3 rounded-lg w-full focus:outline-none focus:border-cyan-500 transition [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none" />
+              <input type="number" name="damage" placeholder="2500" className="bg-zinc-900 border border-zinc-800 text-white p-3 rounded-lg w-full focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none" />
             </div>
           </div>
 
@@ -111,16 +106,18 @@ export default function EditForm({ combo, allTags }: Props) {
             <label className="block text-[10px] font-bold text-zinc-500 mb-1 uppercase tracking-widest">Tags</label>
             <div className="flex flex-wrap gap-2 mb-2 min-h-[24px]">
               {tags.map((tag) => (
-                <span key={tag} onClick={() => setTags(tags.filter(t => t !== tag))} className="bg-zinc-800 border border-zinc-700 text-zinc-300 px-2 py-0.5 rounded text-[10px] font-bold cursor-pointer hover:bg-red-900/50 hover:text-red-300 flex gap-1 group">#{tag} <span className="opacity-50 group-hover:opacity-100">×</span></span>
+                <span key={tag} onClick={() => setTags(tags.filter(t => t !== tag))} className="bg-violet-900/30 border border-violet-800 text-violet-300 px-2 py-0.5 rounded text-[10px] font-bold cursor-pointer hover:bg-red-900/30 hover:text-red-300 transition-colors flex items-center gap-1 group">
+                  #{tag} <span className="opacity-50 group-hover:opacity-100">×</span>
+                </span>
               ))}
             </div>
-            <input type="text" value={tagInput} onChange={(e) => setTagInput(e.target.value)} onKeyDown={addTag} className="bg-zinc-900 border border-zinc-800 text-zinc-100 text-sm p-3 rounded-lg w-full focus:outline-none focus:border-cyan-500 transition mb-2" placeholder="新しいタグを入力してEnter" />
+            <input type="text" value={tagInput} onChange={(e) => setTagInput(e.target.value)} onKeyDown={addTag} className="bg-zinc-900 border border-zinc-800 text-zinc-100 text-sm p-3 rounded-lg w-full focus:outline-none focus:border-purple-500 transition mb-2" placeholder="新しいタグを入力してEnter" />
             
-            {/* 候補タグボタン */}
+            {/* ★ここが既存のタグボタンの追加箇所★ */}
             {availableTags.length > 0 && (
               <div className="flex flex-wrap gap-1">
                 {availableTags.map(tag => (
-                  <button type="button" key={tag.id} onClick={() => addExistingTag(tag.name)} className="bg-zinc-900 border border-zinc-700 text-zinc-500 hover:text-cyan-300 hover:bg-zinc-800 hover:border-cyan-900/50 px-2 py-1 rounded text-[10px] font-bold transition-all">
+                  <button type="button" key={tag.id} onClick={() => addExistingTag(tag.name)} className="bg-zinc-900 border border-zinc-700 text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800 hover:border-zinc-500 px-2 py-1 rounded text-[10px] font-bold transition-all">
                     + {tag.name}
                   </button>
                 ))}
@@ -129,12 +126,12 @@ export default function EditForm({ combo, allTags }: Props) {
           </div>
 
           <div>
-             <label className="block text-[10px] font-bold text-zinc-500 mb-1 uppercase tracking-widest">Memo</label>
-             <textarea name="remarks" defaultValue={combo.remarks ?? ""} rows={3} className="bg-zinc-900 border border-zinc-800 text-zinc-100 text-sm p-3 rounded-lg w-full focus:outline-none focus:border-cyan-500 transition"></textarea>
+            <label className="block text-[10px] font-bold text-zinc-500 mb-1 uppercase tracking-widest">Memo</label>
+            <textarea name="remarks" rows={3} className="bg-zinc-900 border border-zinc-800 text-zinc-100 text-sm p-3 rounded-lg w-full focus:outline-none focus:border-purple-500 transition"></textarea>
           </div>
 
-          <button type="submit" className="w-full bg-gradient-to-r from-emerald-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 text-white font-black text-lg p-4 rounded-xl shadow-lg transition-all active:scale-[0.99] uppercase tracking-widest">
-            UPDATE RECORD
+          <button type="submit" disabled={selectedMoves.length === 0} className="w-full bg-gradient-to-r from-violet-700 to-fuchsia-700 hover:from-violet-600 hover:to-fuchsia-600 text-white font-black text-lg p-4 rounded-xl shadow-lg transition-all active:scale-[0.99] disabled:opacity-30">
+            SAVE RECORD
           </button>
         </form>
       </div>
