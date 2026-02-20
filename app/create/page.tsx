@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import prisma from "../lib/prisma"; // データベースアクセス用のPrismaクライアント
 import ClientCreateForm from "./ClientCreateForm"; // 後述する実際の表示用ファイル
 
