@@ -12,8 +12,13 @@ export default async function EditPage({ params }: { params: Promise<{ id: strin
 
   if (!combo) return notFound();
 
-  // 追加：ここですべての既存タグを取得して、EditForm に渡す！
-  const allTags = await prisma.tag.findMany();
+  // ①ここで、削除されて今はもうどこにも使われていない不要タグを除外して渡す！
+  const allTags = await prisma.tag.findMany({
+    where: {
+      combos: { some: {} } // 使われている実績が1個以上あるタグだけ取得
+    },
+    orderBy: { name: 'asc' } // あいうえお順で綺麗に表示するおまけ
+  });
 
   return <EditForm combo={combo} allTags={allTags} />;
 }
