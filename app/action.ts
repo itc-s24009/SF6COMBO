@@ -76,3 +76,55 @@ export async function deleteCombo(formData: FormData) {
   });
   revalidatePath("/");
 }
+// --- Strategy Tips 関連 ---
+
+export async function createTip(formData: FormData) {
+  const title = formData.get("title") as string
+  const content = formData.get("content") as string
+  const charactersString = formData.get("characters") as string
+  const chars = charactersString ? charactersString.split(",").filter(c => c) : []
+
+  await prisma.strategyTip.create({
+    data: {
+      title, content,
+      characters: {
+        connectOrCreate: chars.map(c => ({
+          where: { name: c },
+          create: { name: c }
+        }))
+      }
+    }
+  })
+  revalidatePath("/tips");
+  redirect("/tips");
+}
+
+export async function updateTip(formData: FormData) {
+  const id = formData.get("id") as string
+  const title = formData.get("title") as string
+  const content = formData.get("content") as string
+  const charactersString = formData.get("characters") as string
+  const chars = charactersString ? charactersString.split(",").filter(c => c) : []
+
+  await prisma.strategyTip.update({
+    where: { id },
+    data: {
+      title, content,
+      characters: {
+        set: [], // 一度リセット
+        connectOrCreate: chars.map(c => ({
+          where: { name: c },
+          create: { name: c }
+        }))
+      }
+    }
+  })
+  revalidatePath("/tips");
+  redirect("/tips");
+}
+
+export async function deleteTip(formData: FormData) {
+  const id = formData.get("id") as string
+  await prisma.strategyTip.delete({ where: { id } })
+  revalidatePath("/tips")
+}

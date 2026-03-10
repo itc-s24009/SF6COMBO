@@ -3,7 +3,33 @@ import { useState } from "react";
 import { createCombo } from "../action";
 import Link from "next/link";
 
+// --- ドラッグ&ドロップ用インポート ---
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  horizontalListSortingStrategy,
+  useSortable,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+
+// --- 型定義 ---
+type SelectedMove = {
+  id: string; // ユニークなID
+  name: string; // 技名
+};
+
 const MOVE_GROUPS = [
+  { category: "始動", moves: ["パニカン", "カウンター"] },
   { category: "立ち", moves: ["弱P", "中P", "強P", "弱K", "中K", "強K"] },
   { category: "屈", moves: ["屈弱P", "屈中P", "屈強P", "屈弱K", "屈中K", "屈強K"] },
   { category: "空中", moves: ["飛弱P", "飛中P", "飛強P", "飛弱K", "飛中K", "飛強K"] },
@@ -17,21 +43,90 @@ const MOVE_GROUPS = [
   { category: "システム・移動", moves: ["前ステ", "バクステ", "DR", "CDR", "垂直", "前ジャンプ", "後ろジャンプ", "前投げ", "後ろ投げ", "インパクト", "パリィスカ"] }
 ];
 
+// --- 並び替え可能な各技ボタンのコンポーネント ---
+function SortableMove({ move, index, total, onRemove }: { move: SelectedMove; index: number; total: number; onRemove: (id: string) => void }) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: move.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    zIndex: isDragging ? 100 : "auto",
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`relative flex items-center group ${isDragging ? "opacity-50" : ""}`}
+    >
+      <div
+        {...attributes}
+        {...listeners}
+        className="cursor-grab active:cursor-grabbing flex items-center bg-zinc-800 border border-zinc-700 text-zinc-100 pl-3 pr-2 py-1.5 rounded text-xs font-bold hover:border-zinc-500 transition-all"
+      >
+        <span className="mr-2">{move.name}</span>
+        {/* 削除ボタン：ここをクリックした時だけ削除 */}
+        <button
+          type="button"
+          onPointerDown={(e) => e.stopPropagation()} // ドラッグ開始を防ぐ
+          onClick={() => onRemove(move.id)}
+          className="w-4 h-4 flex items-center justify-center bg-zinc-700 hover:bg-red-600 rounded-sm text-[10px] text-zinc-300 hover:text-white transition-colors"
+        >
+          ✕
+        </button>
+      </div>
+      {/* 矢印：ドラッグ中は隠すか位置調整 */}
+      {index < total - 1 && (
+        <span className="text-zinc-600 mx-1.5 text-xs pointer-events-none italic font-bold">▶</span>
+      )}
+    </div>
+  );
+}
+
 export default function ClientCreateForm({ allTags }: { allTags: { id: string; name: string }[] }) {
-  const [selectedMoves, setSelectedMoves] = useState<string[]>([]);
+  // stateの型を SelectedMove[] に変更
+  const [selectedMoves, setSelectedMoves] = useState<SelectedMove[]>([]);
   const [tagInput, setTagInput] = useState<string>("");
   const [tags, setTags] = useState<string[]>([]);
 
-  const addMove = (move: string) => setSelectedMoves([...selectedMoves, move]);
-  const removeMove = (indexToRemove: number) => {
-    setSelectedMoves(selectedMoves.filter((_, index) => index !== indexToRemove));
+  // センサーの設定
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }), // 5px動いたらドラッグ開始
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+
+  const addMove = (moveName: string) => {
+    setSelectedMoves([...selectedMoves, { id: crypto.randomUUID(), name: moveName }]);
   };
-  
+
+  const removeMove = (id: string) => {
+    setSelectedMoves(selectedMoves.filter((m) => m.id !== id));
+  };
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (over && active.id !== over.id) {
+      setSelectedMoves((items) => {
+        const oldIndex = items.findIndex((i) => i.id === active.id);
+        const newIndex = items.findIndex((i) => i.id === over.id);
+        return arrayMove(items, oldIndex, newIndex);
+      });
+    }
+  };
+
+  // 既存タグ、Form処理などは以前と同様
   const addTag = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
-      e.preventDefault(); 
+      e.preventDefault();
       if (tagInput.trim() !== "" && !tags.includes(tagInput.trim())) {
-        setTags([...tags, tagInput.trim()]); 
+        setTags([...tags, tagInput.trim()]);
         setTagInput("");
       }
     }
@@ -42,49 +137,75 @@ export default function ClientCreateForm({ allTags }: { allTags: { id: string; n
       setTags([...tags, tagName]);
     }
   }
-
-  // 現存するタグの中で、まだ「今のコンボ」で選んでいないものだけを下に出す
   const availableTags = allTags.filter((t) => !tags.includes(t.name));
 
   return (
     <div className="max-w-4xl mx-auto pb-20 text-zinc-100 min-h-screen">
       
-      {/* 入力モニター（常に一番上に張り付きます） */}
+      {/* 入力モニター：ドラッグドロップ対応 */}
       <div className="sticky top-0 z-50 bg-zinc-950/95 backdrop-blur-md border-b border-zinc-800 shadow-xl">
         <div className="p-3 max-w-4xl mx-auto flex flex-col gap-2">
           <div className="flex justify-between items-center text-xs">
-            <span className="font-bold tracking-widest text-zinc-500">NEW RECORD</span>
+            <span className="font-bold tracking-widest text-zinc-500 uppercase">Input Sequence</span>
             <Link href="/" className="font-bold text-zinc-500 hover:text-white transition">CANCEL</Link>
           </div>
           
-          <div className="min-h-[50px] flex flex-wrap gap-2 items-center relative">
-            {selectedMoves.length === 0 && <span className="text-zinc-700 text-xs font-mono">INPUT COMMANDS...</span>}
-            {selectedMoves.map((move, index) => (
-              <button key={index} onClick={() => removeMove(index)} className="group relative bg-zinc-800 border border-zinc-700 text-zinc-100 px-2 py-1 rounded text-xs font-bold hover:bg-red-900/50 hover:border-red-500 hover:text-red-200 transition-all">
-                {move}
-                {index < selectedMoves.length - 1 && <span className="absolute -right-2 top-1 text-zinc-600 pointer-events-none scale-75">▶</span>}
-              </button>
-            ))}
+          <div className="min-h-[54px] flex flex-wrap gap-y-3 gap-x-1 items-center relative">
+            {selectedMoves.length === 0 && (
+              <span className="text-zinc-700 text-[10px] font-mono tracking-tighter uppercase pl-1">
+                [ No input recorded ]
+              </span>
+            )}
+            
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={handleDragEnd}
+            >
+              <SortableContext items={selectedMoves.map(m => m.id)} strategy={horizontalListSortingStrategy}>
+                {selectedMoves.map((move, index) => (
+                  <SortableMove 
+                    key={move.id} 
+                    move={move} 
+                    index={index} 
+                    total={selectedMoves.length} 
+                    onRemove={removeMove} 
+                  />
+                ))}
+              </SortableContext>
+            </DndContext>
           </div>
         </div>
       </div>
 
       <div className="p-4 sm:p-6 space-y-6">
         
-        {/* 技パネル */}
+        {/* 技パネル：デザインロジック継承 */}
         <div className="space-y-4">
           {MOVE_GROUPS.map((group) => (
             <div key={group.category}>
-              <h3 className="text-[10px] font-bold text-zinc-600 uppercase mb-1 flex items-center gap-2">
+              <h3 className="text-[10px] font-bold text-zinc-600 uppercase mb-1.5 flex items-center gap-2">
                 <span className="w-1 h-1 bg-purple-500 rounded-full"></span>{group.category}
               </h3>
               <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-1.5">
                 {group.moves.map((move) => {
                   const isSpecial = move.includes("SA") || move.includes("OD");
-                  const isSystem = ["DR", "CDR", "インパクト", "パリィスカ", "前ステ", "バクステ"].includes(move);
-                  const isJump = group.category === "空中";
+                  const isSystem = ["DR", "CDR", "パリィスカ", "前ステ", "バクステ"].includes(move);
+                  const isPunish = move === "パニカン";
+                  const isCounter = move === "カウンター";
+                  const isImpact = move === "インパクト";
+
+                  let buttonStyle = "bg-zinc-900 border-zinc-800 text-zinc-300 hover:bg-zinc-800 hover:border-zinc-600";
+                  if (isPunish) buttonStyle = "bg-orange-950/40 border-orange-700 text-orange-400 hover:bg-orange-800 hover:border-orange-500";
+                  else if (isCounter) buttonStyle = "bg-yellow-950/30 border-yellow-800 text-yellow-300 hover:bg-yellow-800 hover:border-yellow-600";
+                  else if (isImpact) buttonStyle = "bg-red-950/40 border-red-700 text-red-400 hover:bg-red-800 hover:border-red-500";
+                  else if (isSpecial) buttonStyle = "bg-fuchsia-950/40 border-fuchsia-900 text-fuchsia-200 hover:bg-fuchsia-900/60";
+                  else if (isSystem) buttonStyle = "bg-slate-900 border-slate-800 text-slate-300 hover:bg-slate-800";
+
                   return (
-                    <button type="button" key={move} onClick={() => addMove(move)} className={`py-2 px-1 text-[11px] font-bold rounded border active:scale-95 transition-colors ${isSpecial ? 'bg-fuchsia-950/40 border-fuchsia-900 text-fuchsia-200 hover:bg-fuchsia-900/60' : isSystem ? 'bg-slate-900 border-slate-800 text-slate-300 hover:bg-slate-800' : isJump ? 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:bg-zinc-800' : 'bg-zinc-900 border-zinc-800 text-zinc-300 hover:bg-zinc-800 hover:border-zinc-600'}`}>{move}</button>
+                    <button type="button" key={move} onClick={() => addMove(move)} className={`py-2 px-1 text-[11px] font-bold rounded border active:scale-95 transition-colors ${buttonStyle}`}>
+                      {move}
+                    </button>
                   )
                 })}
               </div>
@@ -92,9 +213,10 @@ export default function ClientCreateForm({ allTags }: { allTags: { id: string; n
           ))}
         </div>
 
-        {/* 登録フォーム */}
+        {/* 登録フォーム：selectedMovesの送信形式を文字列に直す */}
         <form action={createCombo} className="space-y-6 pt-4 border-t border-zinc-800">
-          <input type="hidden" name="moves" value={selectedMoves.join(" > ")} />
+          <input type="hidden" name="moves" value={selectedMoves.map(m => m.name).join(" > ")} />
+          {/* ...その他の hidden input や field は同じ... */}
           <input type="hidden" name="tags" value={tags.join(",")} />
 
           <div className="flex gap-4">
@@ -110,8 +232,6 @@ export default function ClientCreateForm({ allTags }: { allTags: { id: string; n
 
           <div>
             <label className="block text-[10px] font-bold text-zinc-500 mb-1 uppercase tracking-widest">Tags</label>
-            
-            {/* 選択したタグ */}
             <div className="flex flex-wrap gap-2 mb-2 min-h-[24px]">
               {tags.map((tag) => (
                 <span key={tag} onClick={() => setTags(tags.filter(t => t !== tag))} className="bg-violet-900/30 border border-violet-800 text-violet-300 px-2 py-0.5 rounded text-[10px] font-bold cursor-pointer hover:bg-red-900/30 hover:text-red-300 transition-colors flex items-center gap-1 group">
@@ -119,11 +239,8 @@ export default function ClientCreateForm({ allTags }: { allTags: { id: string; n
                 </span>
               ))}
             </div>
-
-            {/* 新規タグ入力 */}
             <input type="text" value={tagInput} onChange={(e) => setTagInput(e.target.value)} onKeyDown={addTag} className="bg-zinc-900 border border-zinc-800 text-zinc-100 text-sm p-3 rounded-lg w-full focus:outline-none focus:border-purple-500 transition mb-2" placeholder="新しいタグを入力してEnter" />
             
-            {/* ★既存のタグから選択★ */}
             {availableTags.length > 0 && (
               <div className="flex flex-wrap gap-1 mt-1 p-2 bg-zinc-950/50 rounded border border-zinc-800/50">
                 <span className="w-full text-[10px] text-zinc-600 font-bold mb-1 uppercase tracking-widest block">Existing Tags:</span>
@@ -141,8 +258,8 @@ export default function ClientCreateForm({ allTags }: { allTags: { id: string; n
             <textarea name="remarks" rows={3} className="bg-zinc-900 border border-zinc-800 text-zinc-100 text-sm p-3 rounded-lg w-full focus:outline-none focus:border-purple-500 transition"></textarea>
           </div>
 
-          <button type="submit" disabled={selectedMoves.length === 0} className="w-full bg-gradient-to-r from-violet-700 to-fuchsia-700 hover:from-violet-600 hover:to-fuchsia-600 text-white font-black text-lg p-4 rounded-xl shadow-lg transition active:scale-[0.99] disabled:opacity-30">
-            SAVE RECORD
+          <button type="submit" disabled={selectedMoves.length === 0} className="w-full bg-gradient-to-r from-violet-700 to-fuchsia-700 hover:from-violet-600 hover:to-fuchsia-600 text-white font-black text-lg p-4 rounded-xl shadow-lg transition active:scale-[0.99] disabled:opacity-30 uppercase tracking-widest">
+            Save Record
           </button>
         </form>
       </div>

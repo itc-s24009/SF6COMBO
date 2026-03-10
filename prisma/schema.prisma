@@ -7,6 +7,7 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// 既存のコンボ関連
 model Combo {
   id        String   @id @default(cuid())
   moves     String   
@@ -18,7 +19,22 @@ model Combo {
 }
 
 model Tag {
-  id        String   @id @default(cuid())
-  name      String   @unique
-  combos    Combo[]
+  id     String  @id @default(cuid())
+  name   String  @unique
+  combos Combo[]
+}
+
+// --- 【新規】Strategy Tips用 ---
+model StrategyTip {
+  id         String      @id @default(cuid())
+  title      String      // 攻略タイトル
+  content    String      // 解説本文
+  characters Character[] // 対象となるキャラ（複数選択可能）
+  createdAt  DateTime    @default(now())
+}
+
+model Character {
+  id   String        @id @default(cuid())
+  name String        @unique // リュウ、ルーク、全員など
+  tips StrategyTip[]
 }

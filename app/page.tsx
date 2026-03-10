@@ -1,6 +1,7 @@
 import Link from "next/link";
 import prisma from "../app/lib/prisma";
 import ComboCard from "./components/ComboCard";
+import MainHeader from "./components/MainHeader"; 
 
 export default async function Home({
   searchParams,
@@ -47,12 +48,7 @@ export default async function Home({
   return (
     <div className="max-w-2xl mx-auto p-4 sm:p-6 pb-20 text-zinc-100">
       {/* ヘッダーエリア */}
-      <div className="flex justify-between items-center mb-8 mt-2">
-        <h1 className="text-2xl font-black tracking-tighter bg-gradient-to-r from-purple-400 to-pink-600 bg-clip-text text-transparent italic">
-          COMBO RECORDER
-        </h1>
-      </div>
-
+      <MainHeader />
       {/* 作成ボタン */}
       <Link
         href="/create"
